@@ -17,14 +17,16 @@ public class SyncService {
     public void renameMe(File photoRootFolder) throws IOException {
         List<File> foldersAndSubFolders = getFoldersRecusrively(photoRootFolder, 2);
 
-        List<PhotoList> allPhotos = ;
+        List<PhotoList> allPhotos = null;
 
 
 
 
     }
 
+    private List<File> getFoldersRecusrively(File photoRootFolder, int i) {
+        return null;
+    }
 
 
-    publi 
 }
