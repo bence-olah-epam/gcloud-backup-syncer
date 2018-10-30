@@ -18,13 +18,17 @@ import com.google.photos.library.v1.PhotosLibrarySettings;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URL;
 import java.security.GeneralSecurityException;
 import java.util.List;
 
 /** A factory class that helps initialize a {@link PhotosLibraryClient} instance. */
 public class PhotosLibraryClientFactory {
+
+
+  private static final URL resource = PhotosLibraryClientFactory.class.getResource("/");
   private static final java.io.File DATA_STORE_DIR =
-      new java.io.File(PhotosLibraryClientFactory.class.getResource("/").getPath(), "credentials");
+      new java.io.File("tmp", "credentials");
   private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
   private static final int LOCAL_RECEIVER_PORT = 61984;
 
@@ -79,8 +83,9 @@ public class PhotosLibraryClientFactory {
             .setAccessType("offline")
             .build();
     LocalServerReceiver receiver =
-        new LocalServerReceiver.Builder().setPort(LOCAL_RECEIVER_PORT).build();
-    Credential credential = new AuthorizationCodeInstalledApp(flow, receiver).authorize("user");
+        new LocalServerReceiver.Builder().setHost("localhost").setPort(LOCAL_RECEIVER_PORT).build();
+    AuthorizationCodeInstalledApp.Browser browser = new OAuthBrowser();
+    Credential credential = new AuthorizationCodeInstalledApp(flow, receiver, browser).authorize("user");
     return UserCredentials.newBuilder()
         .setClientId(clientId)
         .setClientSecret(clientSecret)
