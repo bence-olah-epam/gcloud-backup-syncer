@@ -2,7 +2,6 @@ package com.olah.gcloud.backup.syncer;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
-import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
@@ -82,9 +81,13 @@ public class PhotosLibraryClientFactory {
             .setDataStoreFactory(new FileDataStoreFactory(DATA_STORE_DIR))
             .setAccessType("offline")
             .build();
-    LocalServerReceiver receiver =
-        new LocalServerReceiver.Builder().setHost("localhost").setPort(LOCAL_RECEIVER_PORT).build();
-    AuthorizationCodeInstalledApp.Browser browser = new OAuthBrowser();
+//    LocalServerReceiver receiver =
+//        new LocalServerReceiver.Builder().setServerHost("localhost").setPort(LOCAL_RECEIVER_PORT).build();
+
+      VerificationCodeReceiver receiver =        new VerificationCodeReceiver.Builder().setRedirectHost("localhost").setServerHost("0.0.0.0").setPort(LOCAL_RECEIVER_PORT).build();
+
+
+      AuthorizationCodeInstalledApp.Browser browser = new OAuthBrowser();
     Credential credential = new AuthorizationCodeInstalledApp(flow, receiver, browser).authorize("user");
     return UserCredentials.newBuilder()
         .setClientId(clientId)
