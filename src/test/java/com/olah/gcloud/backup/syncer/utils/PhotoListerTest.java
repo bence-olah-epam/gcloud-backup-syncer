@@ -9,10 +9,13 @@ import java.util.List;
 public class PhotoListerTest {
 
     @Test
-    public void test() throws IOException {
+    public void testPictureListing() throws IOException {
         PhotoLister photoLister = new PhotoLister();
         List<String> result = photoLister.listPictures("./src/test/resources");
 
         Assert.assertEquals("images/armadillo.jpg", result.get(0));
     }
+
+
+
 }

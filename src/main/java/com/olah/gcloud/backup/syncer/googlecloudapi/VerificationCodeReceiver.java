@@ -1,4 +1,4 @@
-package com.olah.gcloud.backup.syncer;
+package com.olah.gcloud.backup.syncer.googlecloudapi;
 
 
 import com.google.api.client.util.Throwables;
