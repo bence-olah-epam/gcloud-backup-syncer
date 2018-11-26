@@ -4,6 +4,7 @@ import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInsta
 import com.google.api.core.ApiFuture;
 import com.google.api.gax.rpc.ApiException;
 import com.google.photos.library.v1.PhotosLibraryClient;
+import com.google.photos.library.v1.internal.InternalPhotosLibraryClient;
 import com.google.photos.library.v1.proto.*;
 import com.google.photos.library.v1.upload.UploadMediaItemRequest;
 import com.google.photos.library.v1.upload.UploadMediaItemResponse;
@@ -16,11 +17,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.security.GeneralSecurityException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.StreamSupport;
 
 import static com.google.photos.library.v1.PhotosLibrarySettings.newBuilder;
 import static org.powermock.api.mockito.PowerMockito.when;
@@ -91,17 +90,26 @@ public class GooglePhotoAPIFacade {
         System.out.println("******* ID: " + id + " " + url);
     }
 
-    public Album getOrCreateAlbum(String albumName) {
+    public Album getOrCreateAlbum( String albumName) {
+        System.out.println("Trying to find album:" + albumName);
         Album album = albumCache.get(albumName);
         if (album == null) {
+            System.out.println("Album was not cached, albumName:" + albumName);
             try{
-                album = client.getAlbum(albumName);
+                InternalPhotosLibraryClient.ListAlbumsPagedResponse listAlbumsPagedResponse = client.listAlbums();
+                Optional<Album> first = StreamSupport.stream(listAlbumsPagedResponse.iterateAll().spliterator(), false).filter(x -> x.getTitle().equals(albumName)).findFirst();
+
+                if(first.isPresent()){
+                    album = first.get();
+                    System.out.println("album already exists, albumName:" + albumName);
+                }
             } catch (RuntimeException rte) {
                 // album not found
             }
         }
 
         if (album == null) {
+            System.out.println("album was not found at all, creating album:" + albumName);
             album = client.createAlbum(albumName);
         }
         albumCache.put(albumName, album);
@@ -113,7 +121,7 @@ public class GooglePhotoAPIFacade {
     public void uploadPicture(Album album, File picture) throws FileNotFoundException, ExecutionException, InterruptedException {
         UploadMediaItemRequest.Builder uploadRequestBuilder = UploadMediaItemRequest.newBuilder();
         uploadRequestBuilder
-                .setFileName("happy.jpeg")
+                .setFileName(picture.getName())
                 .setDataFile(new RandomAccessFile(picture.getAbsolutePath(), "r"));
         ApiFuture<UploadMediaItemResponse> uploadResponseFuture =
                 client.uploadMediaItemCallable().futureCall(uploadRequestBuilder.build());

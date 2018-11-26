@@ -10,16 +10,17 @@ import com.olah.gcloud.backup.syncer.utils.FileUtils;
 import com.olah.gcloud.backup.syncer.utils.PhotoLister;
 
 import java.io.File;
+import java.io.FileFilter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static java.util.stream.Collectors.groupingBy;
 
 public class SyncService {
     private PhotoLister photoLister = new PhotoLister();
@@ -34,72 +35,83 @@ public class SyncService {
     }
 
     public static void main(String[] args) throws IOException, GeneralSecurityException {
+
         new SyncService().synchronizeFolders(new File("./src/test/resources/syncservicetest"));
+//        new SyncService().synchronizeFolders(new File("/Volumes/photo"));
     }
 
 
     public void synchronizeFolders(File photoRootFolder) throws IOException {
         Stream<File> folders = fileUtils.getFoldersAtDepth(photoRootFolder, 2);
 
-        folders.forEach(folder -> {
+        folders.filter(y -> y.toString().contains("2018")).forEach(folder -> {
             try {
-                System.out.println("Synchronizing folder " + folder);
-                synchronizeFolder(folder);
+                synchronizeSubFolder(folder);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         });
     }
 
-    private void synchronizeFolder(File currentFolder) throws IOException {
-        List<String> picturePathInCurrentFolder = photoLister.listPictures(currentFolder.getPath());
-        PhotoQueryRequest request = new PhotoQueryRequest();
-        String folderPath = getFolderPath(currentFolder);
-        request.setFolderPath(folderPath);
-        System.out.println("Get photo or folder state: " + request);
+    private void synchronizeSubFolder(File yearFolder) throws IOException {
+        File[] albums = yearFolder.listFiles(File::isDirectory);
 
-        PhotoList photoByFolderAndFileName = addOrUpdatePhoto.getPhotoByFolderAndFileName(request);
-        Map<String, Photo> storedPhotos = null;
-        if (photoByFolderAndFileName.getData() == null) {
-            storedPhotos = new HashMap<>();
-        } else {
-            storedPhotos = photoByFolderAndFileName.getData().stream().collect(Collectors.toMap(Photo::getFileName, Function.identity()));
+        for (File albumFile: albums) {
+            String albumName = albumFile.getParentFile().getName() + "." + albumFile.getName();
+            System.out.println("************************************************************");
+            System.out.println("Synchronizing album: " + albumName + " Folder: " + albumFile);
 
+            List<String> picturePathInCurrentFolder = photoLister.listPictures(albumFile.getPath());
+            System.out.println("Number of files in the folder: " + picturePathInCurrentFolder.size());
+
+            PhotoQueryRequest request = new PhotoQueryRequest();
+            request.setFolderPath(albumName);
+            request.setStatus(PhotoQueryRequest.StatusEnum.SYNCED);
+            System.out.println("Checking photo statuses: " + request);
+
+            PhotoList photoByFolderAndFileName = addOrUpdatePhoto.getPhotoByFolderAndFileName(request);
+
+            Map<String, Photo> storedPhotos = null;
+            if (photoByFolderAndFileName.getData() == null) {
+                storedPhotos = new HashMap<>();
+            } else {
+                storedPhotos = photoByFolderAndFileName.getData().stream().collect(Collectors.toMap(Photo::getFileName, Function.identity()));
+                System.out.println("Statistics about stored photos:");
+                photoByFolderAndFileName.getData().stream().collect(groupingBy(Photo::getStatus)).forEach( (key,value) -> {
+                    System.out.println("Key: " + key + " count: " + value.size());
+                });
+            }
+
+            Map<String, Photo> finalStoredPhotos = storedPhotos;
+            picturePathInCurrentFolder.stream().forEach(picture -> {
+                String fileName = picture.substring(picture.lastIndexOf("/") + 1);
+                Photo photo = finalStoredPhotos.get(fileName);
+                if (photo == null || !photo.getStatus().equals(Photo.StatusEnum.SYNCED)) {
+                    Album album = photoAPIFacade.getOrCreateAlbum(albumName);
+                    try {
+                        photoAPIFacade.uploadPicture(album, new File(albumFile.toPath().toAbsolutePath() + File.separator + picture));
+                    } catch (FileNotFoundException e) {
+                        e.printStackTrace();
+                    } catch (ExecutionException e) {
+                        e.printStackTrace();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    photo = new Photo();
+                    photo.setFileName(fileName);
+                    photo.setFolderPath(albumName);
+                    photo.setStatus(Photo.StatusEnum.SYNCED);
+
+                    System.out.println("Updating photo state: " + photo);
+                    addOrUpdatePhoto.addOrUpdatePhoto(photo);
+                } else {
+                    System.out.println("Picture is stored: " + photo.getStatus() + " path:" + photo.getFileName() + "album:" + albumName);
+                }
+            });
         }
 
-        Map<String, Photo> finalStoredPhotos = storedPhotos;
-        picturePathInCurrentFolder.stream().forEach(picture -> {
-            String fileName = picture.substring(picture.lastIndexOf("/") + 1);
-            Photo photo = finalStoredPhotos.get(fileName);
-            if (photo == null) {
-                System.out.println("Album name: " + currentFolder.getName());
-                Album album = photoAPIFacade.getOrCreateAlbum(currentFolder.getName());
-                try {
-                    photoAPIFacade.uploadPicture(album, new File(picture));
-                } catch (FileNotFoundException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                photo = new Photo();
-                photo.setFileName(fileName);
-                photo.setFolderPath(folderPath);
-                photo.setStatus(Photo.StatusEnum.SYNCED);
 
-                System.out.println("Updating photo state: " + photo);
-                addOrUpdatePhoto.addOrUpdatePhoto(photo);
-            } else {
-                System.out.println("Picture is stored: " + photo.getStatus() + " path:" + photo.getFileName());
-            }
-        });
     }
-
-    private String getFolderPath(File currentFolder) {
-        return currentFolder.getParent() + "." + currentFolder.getName();
-    }
-
 
     public void setAddOrUpdatePhoto(DefaultApi addOrUpdatePhoto) {
         this.addOrUpdatePhoto = addOrUpdatePhoto;
